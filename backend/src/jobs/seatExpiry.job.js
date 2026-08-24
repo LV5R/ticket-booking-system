@@ -1,4 +1,4 @@
-﻿import { Queue, Worker } from 'bullmq';
+import { Queue, Worker } from 'bullmq';
 import pool from '../config/db.js';
 import { releaseSeat } from '../services/seatHold.service.js';
 
@@ -19,14 +19,14 @@ const assignNextInLine = async (showId, category) => {
 };
 
 // ── Repeating job: every 30 seconds ──────────────────────────────────────────
-await seatExpiryQueue.add(
+seatExpiryQueue.add(
   'sweep-expired-holds',
   {},
   {
     repeat: { every: 30_000 },   // 30 seconds
     jobId: 'seat-expiry-repeating',
   }
-);
+).catch(err => console.error('[seatExpiry] Failed to add repeating job:', err.message));
 
 const worker = new Worker(
   'seat-expiry',

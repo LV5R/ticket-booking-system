@@ -1,15 +1,15 @@
-﻿import { validationResult } from 'express-validator';
+import { validationResult } from 'express-validator';
 import * as EventModel   from '../models/event.model.js';
 import * as ShowModel    from '../models/show.model.js';
 import * as ShowSeatModel from '../models/showSeat.model.js';
 import * as SeatLayoutModel from '../models/seatLayout.model.js';
 import * as VenueModel   from '../models/venue.model.js';
 
-// GET /api/events?type=concert&date=2025-12-25
+// GET /api/events?type=concert&date=2025-12-25&organiser_id=5
 export const getEvents = async (req, res) => {
   try {
-    const { type, date } = req.query;
-    const events = await EventModel.getAllEvents({ type, date });
+    const { type, date, organiser_id } = req.query;
+    const events = await EventModel.getAllEvents({ type, date, organiserId: organiser_id });
     res.json(events);
   } catch (err) {
     console.error('[getEvents]', err);

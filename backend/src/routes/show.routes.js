@@ -1,4 +1,4 @@
-﻿import { Router } from 'express';
+import { Router } from 'express';
 import { body } from 'express-validator';
 import { verifyToken, requireRole } from '../middleware/auth.js';
 import * as SC from '../controllers/show.controller.js';
@@ -14,12 +14,13 @@ const seatIdsValidation = [
     .withMessage('Each showSeatId must be a positive integer.'),
 ];
 
-// ── Public ────────────────────────────────────────────────────────────────────
+// -- Public --------------------------------------------------------------------
 router.get('/',          SC.getAllShows);
 router.get('/:id',       SC.getShow);
 router.get('/:id/seats', SC.getShowSeats);
+router.get('/event/:eventId', SC.getShowsForEvent);
 
-// ── POST /api/shows/:id/hold — customer only ──────────────────────────────────
+// -- POST /api/shows/:id/hold � customer only ----------------------------------
 router.post(
   '/:id/hold',
   verifyToken, requireRole('customer'),
@@ -27,7 +28,7 @@ router.post(
   SC.holdSeats
 );
 
-// ── POST /api/shows/:id/release — customer or organiser ──────────────────────
+// -- POST /api/shows/:id/release � customer or organiser ----------------------
 router.post(
   '/:id/release',
   verifyToken, requireRole('customer', 'organiser', 'admin'),
@@ -36,3 +37,4 @@ router.post(
 );
 
 export default router;
+

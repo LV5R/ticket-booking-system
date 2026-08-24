@@ -1,112 +1,87 @@
-﻿# High-Concurrency Ticket Booking System
+﻿# 🎟️ TicketFlow: Full-Stack Ticket Booking System
 
-A full-stack ticketing platform designed to handle high-concurrency seat bookings, featuring real-time seat availability updates, temporary seat holds with TTL, and an automated waitlist assignment system.
+A modern, high-performance ticket booking platform built with **React**, **Node.js**, **PostgreSQL**, and **Redis**. TicketFlow handles real-time concurrency for seat selections, dynamic pricing, and role-based access for customers and event organisers.
 
-## 🚀 Setup Guide
+---
+
+## ✨ Key Features
+
+### 🏢 Role-Based Access Control (RBAC)
+- **Customers:** Browse events, view interactive seat maps, place real-time seat holds, and manage bookings.
+- **Organisers:** Access a dedicated Organiser Dashboard to seamlessly create events, schedule shows, and manage venues.
+
+### 🎭 Interactive Seat Map & Dynamic Pricing
+- **Real-Time Map:** Visual grid layout mapped strictly by rows and seat numbers, preventing UI warping on all devices.
+- **Tiered Pricing Categories:** Dynamically color-coded seats based on pricing tiers (e.g., VIP, Premium, Standard).
+- **Live Checkout Summary:** See exactly what you're paying for with a detailed category breakdown before purchase.
+
+### ⏱️ Concurrency & Live Countdown Timers
+- **Distributed Locks (Redis):** Seats are held atomically using Redis `SET NX EX` to guarantee that double-booking is impossible even under massive traffic.
+- **Live Sync (WebSockets):** The seat map updates in real-time for all viewing users the millisecond a seat is held, booked, or released.
+- **Smart Countdown:** Once a seat is held, a precise countdown timer securely synchronized with the database dictates the TTL (Time-To-Live). If it expires, the seat automatically releases.
+
+### 🌓 Modern UI/UX (Tailwind v4)
+- **Dark & Light Mode:** System-respecting dark mode seamlessly integrated across every component.
+- **My Bookings:** Detailed dashboard for customers showing past/upcoming tickets, live QR codes for entry, per-seat pricing breakdowns, and an elegant cancellation flow.
+
+---
+
+## 🛠️ Tech Stack
+
+### Frontend
+- **Framework:** React + Vite
+- **Styling:** Tailwind CSS v4
+- **Routing:** React Router DOM
+- **Real-time:** Socket.io-client
+- **Icons:** Lucide React
+
+### Backend
+- **Server:** Node.js + Express
+- **Database:** PostgreSQL (pg)
+- **Caching & Locks:** Redis (ioredis)
+- **Background Jobs:** BullMQ
+- **Real-time:** Socket.io
+- **Auth:** JWT (JSON Web Tokens) & bcrypt
+
+---
+
+## 🚀 Getting Started
 
 ### Prerequisites
-- **Node.js** (v18+)
-- **PostgreSQL** (v14+)
-- **Redis** (v4+)
+- Node.js (v18+)
+- PostgreSQL (v14+)
+- Redis Server (Native or via WSL on Windows)
 
-### 1. Backend Setup
-1. Navigate to the backend directory: `cd backend`
-2. Install dependencies: `npm install`
-3. Create a PostgreSQL database (e.g., `ticket_booking`).
-4. Apply the schema: `psql -U postgres -d ticket_booking -f src/db/schema.sql`
-5. Create a `.env` file (see reference below) and configure your database and Redis credentials.
-6. Start the server: `npm run dev`
-
-### 2. Frontend Setup
-1. Navigate to the frontend directory: `cd frontend`
-2. Install dependencies: `npm install`
-3. Start the Vite development server: `npm run dev`
-
----
-
-## ⚙️ `.env.example` Reference (Backend)
-
-```env
-# Application
-PORT=5000
-NODE_ENV=development
-CLIENT_URL=http://localhost:5173
-
-# Database (PostgreSQL)
-DB_HOST=localhost
-DB_PORT=5432
-DB_USER=postgres
-DB_PASSWORD=yourpassword
-DB_NAME=ticket_booking
-
-# Redis & BullMQ
-REDIS_URL=redis://localhost:6379
-
-# Security
-JWT_SECRET=your_super_secret_jwt_key
-SEAT_HOLD_TTL=600
-
-# Email (Nodemailer - SMTP)
-SMTP_HOST=smtp.gmail.com
-SMTP_PORT=587
-EMAIL_USER=your_email@gmail.com
-EMAIL_PASS=your_app_password
-EMAIL_FROM=noreply@ticketbooking.com
+### 1. Clone the repository
+```bash
+git clone https://github.com/LV5R/ticket-booking-system.git
+cd ticket-booking-system
 ```
 
----
+### 2. Backend Setup
+```bash
+cd backend
+npm install
+```
+- Create a `.env` file in the `backend` directory based on the database configuration needed.
+- Seed the database:
+```bash
+npm run seed
+```
+- Start the backend and Redis server:
+```bash
+npm run dev
+```
 
-## 📡 API Endpoint Documentation
-
-### Authentication (`/api/auth`)
-| Method | Endpoint | Access | Description |
-|---|---|---|---|
-| POST | `/register` | Public | Register a new user (customer/organiser) |
-| POST | `/login` | Public | Login and receive JWT |
-
-### Venues (`/api/venues`)
-| Method | Endpoint | Access | Description |
-|---|---|---|---|
-| GET | `/` | Public | List all venues |
-| POST | `/` | Admin | Create a new venue |
-| POST | `/:id/seats` | Admin | Bulk-generate seat layouts for a venue |
-
-### Events & Shows (`/api/events`, `/api/shows`)
-| Method | Endpoint | Access | Description |
-|---|---|---|---|
-| GET | `/api/events` | Public | List events (supports `?type=&date=` filters) |
-| POST | `/api/events` | Organiser | Create an event |
-| POST | `/api/events/:id/shows` | Organiser | Create a show (auto-generates `show_seats`) |
-| GET | `/api/shows/:id/seats` | Public | Get full real-time seat map for a show |
-| POST | `/api/shows/:id/hold` | Customer | Hold specific seats (10-min TTL) |
-| POST | `/api/shows/:id/release`| Customer | Manually release held seats |
-
-### Bookings & Waitlist (`/api/bookings`)
-| Method | Endpoint | Access | Description |
-|---|---|---|---|
-| POST | `/confirm` | Customer | Confirm booking for held seats |
-| GET | `/my` | Customer | View your booking history |
-| DELETE| `/:id/cancel` | Customer | Cancel booking, release seats to pool/waitlist |
-| POST | `/waitlist` | Customer | Join waitlist for a sold-out category |
+### 3. Frontend Setup
+```bash
+cd ../frontend
+npm install
+npm run dev
+```
+- Navigate to `http://localhost:5173` to view the app!
 
 ---
 
-## 🗄️ Database Schema Overview
-
-The system uses PostgreSQL with the following core entities:
-- **`users`**: Manages customers, organisers, and admins.
-- **`venues` & `seat_layouts`**: Defines physical locations and their specific row/seat topologies.
-- **`events` & `shows`**: Events created by organisers, with specific showtimes tied to venues.
-- **`show_seats`**: The core inventory table. Auto-generated when a show is created. Tracks real-time status (`available`, `held`, `booked`), lock expirations (`held_until`), and pricing.
-- **`bookings` & `booking_seats`**: Records confirmed purchases and the specific seats associated with them. Generates a QR payload.
-- **`waitlist`**: Tracks users waiting for specific categories in a show, maintaining their queue `position`.
-
----
-
-## ⏱️ Seat Hold TTL & Waitlist Logic (Brief)
-
-To prevent cart abandonment from locking up inventory, the system employs a **TTL (Time-To-Live) Seat Hold Mechanism**. When a user selects a seat, it is locked using a Redis `SET NX` command and marked as `held` in PostgreSQL for 10 minutes. If the booking is not confirmed within this window, a BullMQ background job automatically releases the seat back to the pool.
-
-If the show is sold out, users can join a **Waitlist**. When a booked seat is cancelled or a hold expires, the system automatically queries the waitlist, finds the user with the lowest queue position, and sends them a time-limited (15-minute) JWT-secured email offer.
-
-*For an in-depth explanation of the concurrency handling and distributed mutex design, please read `SYSTEM_DESIGN.md`.*
+## 🤝 Contributing
+Contributions, issues, and feature requests are welcome. Feel free to check issues page.

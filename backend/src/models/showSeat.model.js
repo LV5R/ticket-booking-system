@@ -1,4 +1,4 @@
-﻿import pool from '../config/db.js';
+import pool from '../config/db.js';
 
 // Bulk-create show_seats from seat_layouts when a show is created.
 // prices = { "Premium": 500, "Standard": 300 }
@@ -35,6 +35,8 @@ export const getShowSeatsByShow = async (showId) => {
        ss.show_id,
        ss.status,
        ss.price,
+       ss.held_by,
+       ss.held_until,
        sl.category,
        sl.row_label,
        sl.seat_number

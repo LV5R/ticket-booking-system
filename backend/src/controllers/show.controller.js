@@ -1,4 +1,4 @@
-﻿import { validationResult } from 'express-validator';
+import { validationResult } from 'express-validator';
 import * as ShowModel     from '../models/show.model.js';
 import * as ShowSeatModel from '../models/showSeat.model.js';
 import { holdSeat, releaseSeat } from '../services/seatHold.service.js';
@@ -58,17 +58,20 @@ export const holdSeats = async (req, res) => {
   const { showSeatIds } = req.body;
 
   const held = [];
+  let heldUntil = null;
   try {
     // Sequential so a failure mid-way lets us rollback only what we held
     for (const seatId of showSeatIds) {
-      await holdSeat(seatId, customerId);
+      const holdRes = await holdSeat(seatId, customerId);
       held.push(seatId);
+      if (!heldUntil) heldUntil = holdRes.heldUntil;
     }
 
     res.json({
       message: `${held.length} seat(s) held for 10 minutes.`,
       held_seat_ids: held,
       expires_in_seconds: 600,
+      held_until: heldUntil,
     });
   } catch (err) {
     // Rollback any seats we already held before the failure
@@ -99,3 +102,16 @@ export const releaseSeats = async (req, res) => {
 
   res.json({ message: 'Release processed.', results });
 };
+
+// GET /api/shows/event/:eventId
+export const getShowsForEvent = async (req, res) => {
+  try {
+    const shows = await ShowModel.getShowsByEvent(req.params.eventId);
+    res.json(shows);
+  } catch (err) {
+    console.error('[getShowsForEvent]', err);
+    res.status(500).json({ message: 'Internal server error.' });
+  }
+};
+
+

@@ -11,7 +11,6 @@ client.on('error', (err) => console.error('Redis Client Error:', err));
 client.on('connect', () => console.log('Redis connected successfully.'));
 client.on('reconnecting', () => console.log('Redis reconnecting...'));
 
-// Connect immediately so the client is ready on import
-await client.connect();
+client.connect().catch(err => console.error('Redis init connection failed:', err.message));
 
 export default client;

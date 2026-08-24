@@ -1,4 +1,6 @@
-﻿import { validationResult }    from 'express-validator';
+import { getIO } from '../sockets/index.js';
+import { generateQR } from '../services/qr.service.js';
+import { validationResult }    from 'express-validator';
 import pool                    from '../config/db.js';
 import * as BookingModel       from '../models/booking.model.js';
 import * as WaitlistModel      from '../models/waitlist.model.js';
@@ -34,13 +36,18 @@ export const confirmBookingHandler = async (req, res) => {
 // GET /api/bookings/my
 export const getMyBookings = async (req, res) => {
   try {
-    const bookings = await BookingModel.getBookingsByCustomer(req.user.id);
-    res.json(bookings);
+    const filter = req.query.filter || 'upcoming';
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 8;
+    
+    const bookings = await BookingModel.getBookingsByCustomer(req.user.id, filter, page, limit);
+    res.json({ bookings, filter, page, limit, hasMore: bookings.length === limit });
   } catch (err) {
     console.error('[getMyBookings]', err);
     res.status(500).json({ message: 'Internal server error.' });
   }
 };
+
 
 // GET /api/bookings/:id
 export const getBooking = async (req, res) => {
@@ -50,12 +57,14 @@ export const getBooking = async (req, res) => {
     if (req.user.role === 'customer' && booking.customer_id !== req.user.id) {
       return res.status(403).json({ message: 'Forbidden.' });
     }
-    res.json(booking);
+    const qrDataUrl = await generateQR(booking.booking_ref);
+    res.json({ ...booking, qrDataUrl });
   } catch (err) {
     console.error('[getBooking]', err);
     res.status(500).json({ message: 'Internal server error.' });
   }
 };
+
 
 // POST /api/bookings/:id/cancel  — customer only
 // Releases seats back to 'available' then triggers waitlist assignNextInLine per freed seat.
@@ -88,6 +97,13 @@ export const cancelBooking = async (req, res) => {
          WHERE id = ANY($1::bigint[])`,
         [ids]
       );
+      
+      const io = getIO();
+      if (io) {
+        seatRows.forEach(seat => {
+          io.to(`show:${seat.show_id}`).emit('seat:released', { showSeatId: seat.show_seat_id });
+        });
+      }
     }
 
     await BookingModel.updateBookingStatus(booking.id, 'cancelled', dbClient);
@@ -167,3 +183,5 @@ export const getRevenue = async (req, res) => {
     res.status(500).json({ message: 'Internal server error.' });
   }
 };
+
+

@@ -1,4 +1,4 @@
-﻿import pool from '../config/db.js';
+import pool from '../config/db.js';
 
 export const createEvent = async ({ organiserId, title, type, description }) => {
   const { rows } = await pool.query(
@@ -9,8 +9,8 @@ export const createEvent = async ({ organiserId, title, type, description }) => 
   return rows[0];
 };
 
-// Supports filter by type and/or date (date matches a show on that date)
-export const getAllEvents = async ({ type, date } = {}) => {
+// Supports filter by type, date, and organiserId
+export const getAllEvents = async ({ type, date, organiserId } = {}) => {
   const conditions = [];
   const params = [];
   let idx = 1;
@@ -26,11 +26,17 @@ export const getAllEvents = async ({ type, date } = {}) => {
     );
     params.push(date);
   }
+  if (organiserId) {
+    conditions.push(`e.organiser_id = $${idx++}`);
+    params.push(organiserId);
+  }
 
   const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
 
   const { rows } = await pool.query(
-    `SELECT e.*, u.name AS organiser_name
+    `SELECT e.*, u.name AS organiser_name,
+       (SELECT MIN(s.date) FROM shows s WHERE s.event_id = e.id) as first_show_date,
+       (SELECT v.name FROM shows s JOIN venues v ON v.id = s.venue_id WHERE s.event_id = e.id ORDER BY s.date ASC LIMIT 1) as venue_name
      FROM events e
      JOIN users u ON u.id = e.organiser_id
      ${where}
