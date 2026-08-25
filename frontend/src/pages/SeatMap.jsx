@@ -2,7 +2,7 @@
 import { useParams, useNavigate } from 'react-router-dom';
 import { io } from 'socket.io-client';
 import toast from 'react-hot-toast';
-import { Loader2, Monitor, ArrowLeft, Ticket, Clock as ClockIcon } from 'lucide-react';
+import { Loader2, Monitor, ArrowLeft, Ticket, Clock as ClockIcon, CreditCard } from 'lucide-react';
 import api from '../api/axios';
 import { AuthContext } from '../context/AuthContext';
 import { Skeleton } from '../components/Skeleton';
@@ -20,6 +20,17 @@ export default function SeatMap() {
   const [expireTime, setExpireTime] = useState(null);
   const [timeLeft, setTimeLeft] = useState(null);
 
+  // Load Razorpay Script
+  useEffect(() => {
+    const script = document.createElement('script');
+    script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+    script.async = true;
+    document.body.appendChild(script);
+    return () => {
+      document.body.removeChild(script);
+    };
+  }, []);
+
   useEffect(() => {
     if (!user) {
       navigate('/login');
@@ -31,7 +42,6 @@ export default function SeatMap() {
         setShow({ event: res.data.event, venue: res.data.venue, date: res.data.date, time: res.data.time });
         setSeats(res.data.seats);
         
-        // Find existing held seats for this user
         const myHeldSeats = res.data.seats.filter(s => s.status === 'held' && s.held_by === user.id);
         if (myHeldSeats.length > 0) {
           setSelectedSeatObjects(myHeldSeats);
@@ -56,7 +66,6 @@ export default function SeatMap() {
 
     newSocket.on('seat:released', ({ showSeatId }) => {
       setSeats(prev => prev.map(s => s.id === showSeatId ? { ...s, status: 'available', held_by: null, held_until: null } : s));
-      // If someone else's release matches our selection, remove it
       setSelectedSeatObjects(prev => {
         const next = prev.filter(s => s.id !== showSeatId);
         if (next.length === 0) setExpireTime(null);
@@ -96,7 +105,6 @@ export default function SeatMap() {
       }
     }, 1000);
 
-    // Initial check
     const initialRemaining = Math.floor((expireTime - Date.now()) / 1000);
     if (initialRemaining <= 0) {
       setTimeLeft(0);
@@ -146,16 +154,82 @@ export default function SeatMap() {
     }
   };
 
-  const confirmBooking = async () => {
+  const initiatePayment = async () => {
     if (selectedSeatObjects.length === 0 || timeLeft === 0) return;
     setIsConfirming(true);
+    
     try {
-      await api.post('/bookings/confirm', { showSeatIds: selectedSeatObjects.map(s => s.id) });
-      toast.success('Booking confirmed successfully!');
-      setExpireTime(null); // Clear timer
+      // 1. Create Payment Order on Backend
+      const orderRes = await api.post('/bookings/create-payment-order', { 
+        showSeatIds: selectedSeatObjects.map(s => s.id) 
+      });
+      
+      const { orderId, amount, currency, key } = orderRes.data;
+
+      // Mock Gateway if keys are missing/placeholders
+      if (key === 'rzp_test_placeholder') {
+        toast.success('Mock Payment Success (Using placeholder keys)');
+        await processBookingConfirmation({
+          razorpay_payment_id: 'pay_mock123',
+          razorpay_order_id: orderId,
+          razorpay_signature: 'mock_sig_456'
+        });
+        return;
+      }
+
+      // 2. Open Razorpay Checkout
+      const options = {
+        key: key,
+        amount: amount,
+        currency: currency,
+        name: 'TicketFlow',
+        description: `Booking for ${show?.event}`,
+        order_id: orderId,
+        handler: async function (response) {
+          // 3. Confirm on Backend
+          await processBookingConfirmation(response);
+        },
+        prefill: {
+          name: user.name,
+          email: user.email,
+        },
+        theme: {
+          color: '#4f46e5' // brand-600
+        },
+        modal: {
+          ondismiss: function() {
+            setIsConfirming(false);
+            toast.error('Payment cancelled. Please try again before your hold expires.');
+          }
+        }
+      };
+
+      const rzp = new window.Razorpay(options);
+      rzp.on('payment.failed', function (response){
+        toast.error('Payment failed: ' + response.error.description);
+        setIsConfirming(false);
+      });
+      rzp.open();
+
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to initiate payment');
+      setIsConfirming(false);
+    }
+  };
+
+  const processBookingConfirmation = async (paymentData) => {
+    try {
+      await api.post('/bookings/confirm', { 
+        showSeatIds: selectedSeatObjects.map(s => s.id),
+        razorpay_payment_id: paymentData.razorpay_payment_id,
+        razorpay_order_id: paymentData.razorpay_order_id,
+        razorpay_signature: paymentData.razorpay_signature
+      });
+      toast.success('Payment successful & Booking confirmed!');
+      setExpireTime(null); 
       navigate('/my-bookings');
     } catch (err) {
-      toast.error(err.response?.data?.message || 'Booking failed');
+      toast.error(err.response?.data?.message || 'Payment verification failed');
       setIsConfirming(false);
     }
   };
@@ -342,12 +416,12 @@ export default function SeatMap() {
               </div>
               
               <button 
-                onClick={confirmBooking}
+                onClick={initiatePayment}
                 disabled={isConfirming || timeLeft === 0}
                 className="w-full sm:w-auto bg-gray-900 dark:bg-white text-white dark:text-gray-900 px-10 py-4 rounded-xl font-bold text-lg hover:bg-brand-600 dark:hover:bg-brand-400 hover:text-white transition-all shadow-xl hover:shadow-2xl hover:-translate-y-1 disabled:opacity-70 disabled:cursor-not-allowed disabled:transform-none flex items-center justify-center gap-3"
               >
-                {isConfirming && <Loader2 className="w-6 h-6 animate-spin" />}
-                {isConfirming ? 'Processing...' : 'Checkout Now'}
+                {isConfirming ? <Loader2 className="w-6 h-6 animate-spin" /> : <CreditCard className="w-6 h-6" />}
+                {isConfirming ? 'Processing...' : 'Pay Securely'}
               </button>
             </div>
           </div>
